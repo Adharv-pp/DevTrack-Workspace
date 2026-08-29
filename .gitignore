@@ -1,14 +1,23 @@
+# Virtual Environments and Cache (CRITICAL)
+venv/
+__pycache__/
+*.pyc
+
 # Web/HTML files
 monkey.html
 
 # Extraneous Python scripts
 hospital*.py
 practice*.py
-test_1.py
+test*.py
 app.py
 lab4exe.py
+lab_8_pandas_student_records.py
+xml_parser_app.py
 
-# JSON data files not needed for the repo
+# Generic Domain Data (Ignored to maintain DevTrack theme)
+student*.csv
+student*.xml
 finance_data.json
 
 # VS Code settings folder

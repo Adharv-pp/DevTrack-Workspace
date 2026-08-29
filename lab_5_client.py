@@ -284,10 +284,12 @@ class Dashboard(QMainWindow):
         # Interactive Controls Grid
         grid = QGridLayout(); grid.setSpacing(10)
         
-        # 1. GET Request
-        btn_get = QPushButton("GET (Fetch All Records)"); btn_get.setObjectName("action")
+        # 1. GET Request (all records, or a single record if an ID is given)
+        self.get_id = QLineEdit(); self.get_id.setPlaceholderText("Project ID (optional — leave blank for all)")
+        btn_get = QPushButton("GET (Fetch Records)"); btn_get.setObjectName("action")
         btn_get.clicked.connect(self.req_get)
-        grid.addWidget(btn_get, 0, 0, 1, 4)
+        grid.addWidget(self.get_id, 0, 0, 1, 3)
+        grid.addWidget(btn_get, 0, 3)
 
         # 2. POST Request (Inputs: Title, Tech, Status)
         self.post_title = QLineEdit(); self.post_title.setPlaceholderText("Project Title")
@@ -337,14 +339,31 @@ class Dashboard(QMainWindow):
 
     def req_get(self):
         self.api_output.clear()
+        pid = self.get_id.text().strip()
+
+        if pid and not pid.isdigit():
+            self.log_response("GET Error: Project ID must be a valid number.", is_error=True)
+            return
+
+        url = f"{self.api_url}/{pid}" if pid else self.api_url
+
         try:
-            res = requests.get(self.api_url, timeout=3)
-            res.raise_for_status() 
-            data = res.json()["data"]
-            self.log_response("<b>[200 OK] Successfully retrieved records:</b>")
-            for proj in data:
+            res = requests.get(url, timeout=3)
+
+            # Handle 404 (single-record not found) with the server's own message
+            if res.status_code == 404:
+                self.log_response(f"[404 NOT FOUND] {res.json().get('error', 'Project not found')}", is_error=True)
+                return
+
+            res.raise_for_status()
+            payload = res.json()["data"]
+
+            self.log_response("<b>[200 OK] Successfully retrieved record(s):</b>")
+            records = payload if isinstance(payload, list) else [payload]
+            for proj in records:
                 formatted = f"ID: {proj['id']} | Title: {proj['title']} | Tech: {proj['tech']} | Status: {proj['status']}"
                 self.api_output.append(f'<span style="color:#c4bfff">{formatted}</span>')
+
         except requests.exceptions.RequestException as e:
             self.log_response(f"Connection Failed: Is the Flask server running? Error: {e}", is_error=True)
 
@@ -360,6 +379,11 @@ class Dashboard(QMainWindow):
         new_data = {"title": t, "tech": tc, "status": s}
         try:
             res = requests.post(self.api_url, json=new_data, timeout=3)
+
+            if res.status_code == 400:
+                self.log_response(f"[400 BAD REQUEST] {res.json().get('error', 'Invalid request')}", is_error=True)
+                return
+
             res.raise_for_status()
             parsed = res.json()
             self.log_response(f"[201 CREATED] {parsed['message']}: {parsed['data']['title']}")
@@ -382,7 +406,10 @@ class Dashboard(QMainWindow):
         try:
             res = requests.put(f"{self.api_url}/{pid}", json=update_data, timeout=3)
             if res.status_code == 404:
-                self.log_response(f"PUT Error: Project ID {pid} not found in database.", is_error=True)
+                self.log_response(f"[404 NOT FOUND] Project ID {pid} not found in database.", is_error=True)
+                return
+            if res.status_code == 400:
+                self.log_response(f"[400 BAD REQUEST] {res.json().get('error', 'Invalid request')}", is_error=True)
                 return
             res.raise_for_status()
             parsed = res.json()
@@ -399,6 +426,11 @@ class Dashboard(QMainWindow):
             
         try:
             res = requests.delete(f"{self.api_url}/{pid}", timeout=3)
+
+            if res.status_code == 404:
+                self.log_response(f"[404 NOT FOUND] {res.json().get('error', 'Project not found')}", is_error=True)
+                return
+
             res.raise_for_status()
             parsed = res.json()
             self.log_response(f"[200 OK] {parsed['message']}")
